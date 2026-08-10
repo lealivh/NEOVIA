@@ -2,12 +2,12 @@ import pandas as pd
 import streamlit as st
 
 from queries import gastos
-from ui_helpers import bar, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, opcoes, set_page, show_logo, theme_fig
+from relatorio import montar_tabela
+from ui_helpers import bar, colorir_barras, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 import plotly.express as px
 
 set_page("Custos de Peças e Serviços", "💰")
 
-show_logo()
 st.title("Custos de Peças e Serviços")
 
 df = gastos().copy()
@@ -21,10 +21,10 @@ data_max = df["data_nf"].dropna().max().date()
 with st.sidebar:
     st.header("Filtros")
     ini, fim = st.date_input("Período (Data NF)", value=(data_min, data_max), min_value=data_min, max_value=data_max)
-    empresa = st.selectbox("Empresa", opcoes(df["empresa"]))
-    tipo = st.selectbox("Tipo de custo (Grupo Aplicação)", opcoes(df["grupo_aplicacao"]))
-    fornecedor = st.selectbox("Fornecedor", opcoes(df["fornecedor"]))
-    agente = st.selectbox("Agente causador", opcoes(df["agente_causador"]))
+    empresa = st.selectbox("Empresa", opcoes(df["empresa"]), key="filtro_cus_empresa")
+    tipo = st.selectbox("Tipo de custo (Grupo Aplicação)", opcoes(df["grupo_aplicacao"]), key="filtro_cus_tipo")
+    fornecedor = st.selectbox("Fornecedor", opcoes(df["fornecedor"]), key="filtro_cus_fornecedor")
+    agente = st.selectbox("Agente causador", opcoes(df["agente_causador"]), key="filtro_cus_agente")
 
 f = df[(df["data_nf"].dt.date >= ini) & (df["data_nf"].dt.date <= fim)]
 if empresa != "Todos":
@@ -52,22 +52,51 @@ with col1:
     agentes_df = f.groupby("agente_causador")["valor"].sum().sort_values(ascending=False).reset_index()
     agentes_df["participacao"] = agentes_df["valor"] / total * 100 if total else 0
     agentes_df["Rótulo"] = agentes_df["agente_causador"] + " (" + agentes_df["participacao"].round(1).astype(str) + "%)"
-    fig = px.bar(agentes_df, x="valor", y="Rótulo", orientation="h", title="Valor total por agente causador")
-    st.plotly_chart(theme_fig(fig), width="stretch")
+    fig_agentes = theme_fig(px.bar(agentes_df, x="valor", y="Rótulo", orientation="h", title="Valor total por agente causador", custom_data=["agente_causador"]))
+    fig_agentes.update_yaxes(categoryorder="total descending")
+    fig_agentes = colorir_barras(fig_agentes, len(agentes_df))
+    fig_agentes = rotular_barras(fig_agentes, agentes_df["valor"])
+    figs = [("Valor total por agente causador", fig_agentes)]
+    plot_click(fig_agentes, "chart_cus_agente", set_filtro("filtro_cus_agente"))
 
 with col2:
-    fornecedores_df = f.groupby("fornecedor")["valor"].sum().sort_values(ascending=False).head(12).reset_index()
-    st.plotly_chart(bar(fornecedores_df, x="fornecedor", y="valor", title="Top fornecedores", horizontal=True), width="stretch")
+    fornecedores_df = f.groupby("fornecedor")["valor"].sum().nlargest(12).reset_index()
+    fig_forn = bar(fornecedores_df, x="fornecedor", y="valor", title="Valor por fornecedor (12 itens)", horizontal=True, custom_data=["fornecedor"])
+    figs.append(("Valor por fornecedor (12 itens)", fig_forn))
+    plot_click(fig_forn, "chart_cus_forn", set_filtro("filtro_cus_fornecedor"))
 
-st.markdown("### Detalhamento")
-cols = ["data_nf", "aplicacao", "fornecedor", "grupo_aplicacao", "agente_causador", "obs", "numero_nf", "valor"]
-visiveis = [c for c in cols if c in f.columns]
-tabela = f[visiveis].sort_values("data_nf", ascending=False)
-dataframe_estilizado(
-    tabela,
-    {
-        "data_nf": st.column_config.DatetimeColumn("Data NF", format="DD/MM/YYYY"),
-        "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
-    },
+with st.expander("📋 Detalhamento", expanded=False):
+    cols = ["data_nf", "aplicacao", "fornecedor", "grupo_aplicacao", "agente_causador", "obs", "numero_nf", "valor"]
+    visiveis = [c for c in cols if c in f.columns]
+    tabela = f[visiveis].sort_values("data_nf", ascending=False)
+    dataframe_estilizado(
+        tabela,
+        {
+            "data_nf": st.column_config.DatetimeColumn("Data NF", format="DD/MM/YYYY"),
+            "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+        },
+    )
+    st.caption(f"{len(tabela)} registros exibidos. Campos *Obra* e *Link NF* ainda não existem na base.")
+
+sidebar_acoes(
+    "Custos de Peças e Serviços",
+    figs,
+    montar_tabela(
+        tabela,
+        visiveis,
+        {
+            "data_nf": ("Data NF", "date"),
+            "aplicacao": ("Aplicação", "str"),
+            "fornecedor": ("Fornecedor", "str"),
+            "grupo_aplicacao": ("Grupo aplicação", "str"),
+            "agente_causador": ("Agente causador", "str"),
+            "obs": ("Observação", "str"),
+            "numero_nf": ("Nº NF", "str"),
+            "valor": ("Valor", "brl"),
+        },
+    ),
+    periodo=f"{ini:%d/%m/%Y} a {fim:%d/%m/%Y}",
+    nome_arquivo="relatorio_custos.pdf",
+    chave="custos",
+    chaves_filtro=["filtro_cus_empresa", "filtro_cus_tipo", "filtro_cus_fornecedor", "filtro_cus_agente"],
 )
-st.caption(f"{len(tabela)} registros exibidos. Campos *Obra* e *Link NF* ainda não existem na base.")

@@ -30,10 +30,14 @@ dashboards/
 │   ├── 4_abastecimento.py # abastecimento financeiro e quantitativo (diesel)
 │   └── 5_kpis.py          # KPIs de abastecimento (veículos leves)
 ├── dados/
-│   └── base.xlsx          # cópia da planilha base (atualizar a cada nova versão)
+│   └── base.xlsx          # cópia da planilha base (NÃO é versionada no Git — ignorada)
 └── assets/
-    └── logo.png           # logomarca
+    ├── logo.png           # logomarca
+    └── icons/             # ícones dos tipos de equipamento
 ```
+
+> **Nota**: a planilha `dados/base.xlsx` contém dados da empresa e **não é incluída no repositório**
+> (está no `.gitignore`). Para executar, coloque a planilha em `dados/` localmente.
 
 ## Abas da planilha utilizadas
 

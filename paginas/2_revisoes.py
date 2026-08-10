@@ -2,11 +2,11 @@ import pandas as pd
 import streamlit as st
 
 from queries import gastos
-from ui_helpers import bar, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, set_page, show_logo
+from relatorio import montar_tabela
+from ui_helpers import bar, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, plot_click, set_filtro, set_page, sidebar_acoes
 
 set_page("Revisões Preventivas", "🛠️")
 
-show_logo()
 st.title("Revisões Preventivas")
 
 st.info(
@@ -27,10 +27,10 @@ prev["empresa"] = prev["locadora"].fillna("Não informado")
 
 with st.sidebar:
     st.header("Filtros")
-    fornecedor = st.selectbox("Fornecedor", opcoes(prev["fornecedor"]))
-    aplicacao = st.selectbox("Frota/Aplicação", opcoes(prev["aplicacao"]))
+    fornecedor = st.selectbox("Fornecedor", opcoes(prev["fornecedor"]), key="filtro_rev_fornecedor")
+    aplicacao = st.selectbox("Frota/Aplicação", opcoes(prev["aplicacao"]), key="filtro_rev_aplicacao")
     meses = ["Todos"] + sorted(prev["mes"].dropna().unique().tolist(), reverse=True)
-    mes = st.selectbox("Competência", meses)
+    mes = st.selectbox("Competência", meses, key="filtro_rev_mes")
 
 f = prev
 if fornecedor != "Todos":
@@ -54,26 +54,51 @@ with col1:
     por_frota = (
         f.groupby("aplicacao")["valor"]
         .sum()
-        .sort_values(ascending=False)
-        .head(15)
+        .nlargest(15)
         .reset_index()
         .rename(columns={"aplicacao": "Frota/Aplicação", "valor": "Valor"})
     )
-    st.plotly_chart(bar(por_frota, x="Frota/Aplicação", y="Valor", title="Valor por frota/aplicação (top 15)", horizontal=True), width="stretch")
+    fig_frota = bar(por_frota, x="Frota/Aplicação", y="Valor", title="Valor por frota/aplicação (15 itens)", horizontal=True, custom_data=["Frota/Aplicação"])
+    figs = [("Valor por frota/aplicação (15 itens)", fig_frota)]
+    plot_click(fig_frota, "chart_rev_frota", set_filtro("filtro_rev_aplicacao"))
 
 with col2:
     mensal = f.groupby("mes")["valor"].sum().reset_index().rename(columns={"mes": "Mês", "valor": "Valor"})
-    st.plotly_chart(linha(mensal, x="Mês", y="Valor", title="Evolução mensal"), width="stretch")
+    fig_mensal = linha(mensal, x="Mês", y="Valor", title="Evolução mensal", custom_data=["Mês"])
+    figs.append(("Evolução mensal dos gastos preventivos", fig_mensal))
+    plot_click(fig_mensal, "chart_rev_mensal", set_filtro("filtro_rev_mes"))
 
-st.markdown("### Detalhamento")
-cols = ["data_nf", "numero_nf", "fornecedor", "aplicacao", "equipe", "valor", "obs"]
-visiveis = [c for c in cols if c in f.columns]
-tabela = f[visiveis].sort_values("data_nf", ascending=False)
-dataframe_estilizado(
-    tabela,
-    {
-        "data_nf": st.column_config.DatetimeColumn("Data NF", format="DD/MM/YYYY"),
-        "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
-    },
+with st.expander("📋 Detalhamento", expanded=False):
+    cols = ["data_nf", "numero_nf", "fornecedor", "aplicacao", "equipe", "valor", "obs"]
+    visiveis = [c for c in cols if c in f.columns]
+    tabela = f[visiveis].sort_values("data_nf", ascending=False)
+    dataframe_estilizado(
+        tabela,
+        {
+            "data_nf": st.column_config.DatetimeColumn("Data NF", format="DD/MM/YYYY"),
+            "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+        },
+    )
+    st.caption(f"{len(tabela)} registros exibidos.")
+
+sidebar_acoes(
+    "Revisões Preventivas",
+    figs,
+    montar_tabela(
+        tabela,
+        visiveis,
+        {
+            "data_nf": ("Data NF", "date"),
+            "numero_nf": ("Nº NF", "str"),
+            "fornecedor": ("Fornecedor", "str"),
+            "aplicacao": ("Frota/Aplicação", "str"),
+            "equipe": ("Equipe", "str"),
+            "valor": ("Valor", "brl"),
+            "obs": ("Observação", "str"),
+        },
+    ),
+    periodo=f"{len(f)} lançamentos PREVENTIVA",
+    nome_arquivo="relatorio_revisoes.pdf",
+    chave="revisoes",
+    chaves_filtro=["filtro_rev_fornecedor", "filtro_rev_aplicacao", "filtro_rev_mes"],
 )
-st.caption(f"{len(tabela)} registros exibidos.")

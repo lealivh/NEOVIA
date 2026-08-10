@@ -1,3 +1,6 @@
+import base64
+import html
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -9,23 +12,47 @@ import data_loader as dl
 
 PROJ_DIR = Path(__file__).parent
 LOGO_PATH = PROJ_DIR / "assets" / "logo.png"
+ICONES_DIR = PROJ_DIR / "assets" / "icons"
+
+BRAND = {
+    "vermelho": "#D00B13",          # vermelho principal do logotipo
+    "vermelho_escuro": "#71140F",   # vermelho escuro do degradê
+    "preto": "#231F1F",             # preto do logotipo e menu
+    "branco": "#FFFFFF",            # branco do cabeçalho
+    "cinza_icones": "#9B9897",      # cinza dos ícones sociais
+    "cinza_claro": "#CCCCCB",       # cinza-claro do título
+    "cinza_medio": "#484849",       # cinza médio da fotografia
+    "cinza_grafite": "#343434",     # cinza grafite
+    "fundo_escuro": "#181818",      # fundo escuro da sobreposição
+    "preto_profundo": "#050505",    # preto profundo da imagem
+}
 
 COLORWAY = [
-    "#1F6FB2",
-    "#2E9E8F",
-    "#F2B705",
-    "#D9534F",
-    "#7A5CF0",
-    "#E07A3F",
-    "#5CA858",
-    "#8E6B4A",
-    "#4FA3D1",
-    "#C44E9C",
+    BRAND["vermelho"],
+    BRAND["vermelho_escuro"],
+    BRAND["preto"],
+    BRAND["cinza_grafite"],
+    BRAND["cinza_medio"],
+    BRAND["cinza_icones"],
+    BRAND["cinza_claro"],
+    BRAND["fundo_escuro"],
+    BRAND["preto_profundo"],
 ]
 
 
 def set_page(title: str, icon: str):
     st.set_page_config(page_title=title, page_icon=icon, layout="wide", initial_sidebar_state="expanded")
+    if LOGO_PATH.exists():
+        st.logo(str(LOGO_PATH), size="large")
+    css_logo()
+
+
+def css_logo():
+    """Aumenta a logomarca no topo da barra lateral (st.logo)."""
+    st.markdown(
+        '<style>[data-testid="stSidebarLogo"]{width:135px !important;height:auto !important;}</style>',
+        unsafe_allow_html=True,
+    )
 
 
 def fmt_br(v: float, decimals: int = 2) -> str:
@@ -71,22 +98,371 @@ def theme_fig(fig):
     return fig
 
 
-def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, top: int | None = None):
+def _rotulo_valor(v) -> str:
+    """Rótulo compacto para os valores das barras (separador de milhar pt-BR)."""
+    if v is None or (isinstance(v, float) and v != v):
+        return ""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    if f.is_integer():
+        return f"{int(f):,}".replace(",", ".")
+    return f"{f:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def colorir_barras(fig, n: int):
+    """Aplica a paleta da marca às barras, ciclando uma cor por barra."""
+    fig.update_traces(marker_color=[COLORWAY[i % len(COLORWAY)] for i in range(n)])
+    return fig
+
+
+def rotular_barras(fig, valores: pd.Series):
+    """Adiciona rótulos de valor (pt-BR) nas barras de um gráfico plotly."""
+    fig.update_traces(
+        text=valores.map(_rotulo_valor),
+        textposition="outside",
+        cliponaxis=False,
+    )
+    return fig
+
+
+ICONES_EQUIPAMENTOS = {
+    "CAM.BASCULANTE": "Caminhão Basculante.png",
+    "CAM. CARROCERIA": "Caminhão Carroceria.png",
+    "CAM. SINALIZAÇÃO": "Caminhão Sinalização.png",
+    "CAM.PIPA": "Caminhão Pipa.png",
+    "CAM.ESPARGIDOR": "Caminhão Espargidor.png",
+    "CAM.LUBRIFICADOR": "Caminhão Lubrificador.png",
+    "CAM.COMPRESSOR": "Caminhão Compressor.png",
+    "CAV.MECÂNICO": "Cavalo Mecânico.png",
+    "COMPRESSOR DE AR": "Compressor de Ar.png",
+    "ESCAVADEIRA HIDRAULICA": "Escavadeira Hidráulica.png",
+    "ESCAVADEIRA ESTEIRA": "Escavadeira Hidráulica.png",
+    "MINI ESCAVADEIRA": "Escavadeira Hidráulica.png",
+    "FRESADORA": "Fresadora.png",
+    "IMPLEMENTO - FRESA": "Fresadora.png",
+    "GERADOR": "Gerador.png",
+    "IMPLEMENTO - VASSOURA": "Implemento Vassoura.png",
+    "MINI CARREGADEIRA": "Mini Carregadeira.png",
+    "PÁ CARREGADEIRA": "Pá Carregadeira.png",
+    "ROLO CORRUGADO": "Rolo Corrugado.png",
+    "ROLO PNEUS": "Rolo de Pneus.png",
+    "ROM PNEUMATICO": "Rolo de Pneus.png",
+    "ROLO TANDEM": "Rolo Tandem.png",
+    "ROLO COMBINADO": "Rolo Tandem.png",
+    "SEMI REBOQUE PRANCHA": "Semi Reboque Prancha.png",
+    "SEMI REBOQUE TANQUE": "Semi Reboque Tanque.png",
+    "CARRETA SILO": "Semi Reboque Tanque.png",
+    "TANQUE FIXO": "Semi Reboque Tanque.png",
+    "USINA DE ASFALTO": "Usina Asfalto.png",
+    "USINA": "Usina Asfalto.png",
+    "VIBRO ACABADORA DE ESTEIRA": "Vibro Acabadora.png",
+    "MICROONIBUS": "Ônibus-Micro Ônibus.png",
+    "ONIBUS": "Ônibus-Micro Ônibus.png",
+    "VAN": "Veículo Leve.png",
+    "BRITAGEM": "Britador Mandibula.png",
+}
+
+_EMOJI_FALLBACK = [
+    (r"TRATOR", "🚜"),
+    (r"BOMBA", "🚛"),
+    (r"BETONEIRA", "🚚"),
+    (r"CONTAINER", "📦"),
+    (r"PLATAFORMA", "🏗️"),
+    (r"MUNCK", "🏗️"),
+    (r"OFICINA", "🔧"),
+    (r"POLICORTE", "🪚"),
+    (r"ROMPEDOR", "⛏️"),
+    (r"CARRETINHA", "🚛"),
+    (r"RECICLADORA", "⚙️"),
+    (r"RETROESCAVADEIRA", "🚧"),
+    (r"VALETADEIRA|MOTONIVELADORA|ESTABILIZADORA", "🚜"),
+    (r"DISTRIBUIDOR|CONSERVA", "🚚"),
+    (r"CAM\.", "🚚"),
+]
+_EMOJI_PADRAO = "🚧"
+
+_QUADRO_CSS = """
+<style>
+.quadro-card{border:1px solid #CCCCCB;border-radius:10px;padding:14px 8px 10px;background:#FFFFFF;
+text-align:center;margin-bottom:10px;height:100%;}
+.quadro-card img{width:72px;height:72px;object-fit:contain;}
+.quadro-emoji{font-size:56px;line-height:1;margin:4px 0 8px;}
+.quadro-tipo{font-size:12px;font-weight:600;color:#231F1F;line-height:1.25;min-height:32px;margin:6px 0 4px;}
+.quadro-qtd{font-size:24px;font-weight:800;color:#D00B13;}
+</style>
+"""
+
+
+def _icone_equipamento(tipo: str) -> tuple[str | None, str | None]:
+    """Retorna (caminho_do_png | None, emoji | None) para o tipo de equipamento."""
+    nome = ICONES_EQUIPAMENTOS.get(tipo)
+    if nome:
+        path = ICONES_DIR / nome
+        if path.exists():
+            return str(path), None
+    for padrao, emoji in _EMOJI_FALLBACK:
+        if re.search(padrao, tipo, re.IGNORECASE):
+            return None, emoji
+    return None, _EMOJI_PADRAO
+
+
+def quadro_equipamentos(
+    dados: pd.DataFrame,
+    col_tipo: str = "classe_operacional",
+    col_qtd: str = "quantidade",
+    cols_por_linha: int = 4,
+    ao_filtrar=None,
+):
+    """Quadro com ícone, descrição do tipo de equipamento e quantidade (ordem A→Z).
+
+    `ao_filtrar`: callable recebendo o tipo (ex.: `set_filtro(...)`) — cria um
+    botão "Filtrar" em cada card quando informado.
+    """
+    st.markdown(_QUADRO_CSS, unsafe_allow_html=True)
+    itens = dados.sort_values(col_tipo).to_dict("records")
+    if not itens:
+        st.caption("Nenhum tipo de equipamento no filtro atual.")
+        return
+    for i in range(0, len(itens), cols_por_linha):
+        cols = st.columns(cols_por_linha)
+        for col, item in zip(cols, itens[i : i + cols_por_linha]):
+            tipo = str(item[col_tipo])
+            qtd = item[col_qtd]
+            img, emoji = _icone_equipamento(tipo)
+            with col:
+                if img:
+                    with open(img, "rb") as f:
+                        b64 = base64.b64encode(f.read()).decode()
+                    corpo = f'<img src="data:image/png;base64,{b64}" alt="">'
+                else:
+                    corpo = f'<div class="quadro-emoji">{emoji}</div>'
+                st.markdown(
+                    f'<div class="quadro-card">{corpo}'
+                    f'<div class="quadro-tipo">{html.escape(tipo)}</div>'
+                    f'<div class="quadro-qtd">{qtd}</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if ao_filtrar is not None:
+                    st.button(
+                        "🔎 Filtrar",
+                        key=f"quadro_filtrar_{i}_{col_tipo}_{tipo}",
+                        use_container_width=True,
+                        help=f"Filtrar a página pelo tipo {tipo}",
+                        on_click=ao_filtrar,
+                        args=(tipo,),
+                    )
+
+
+def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, top: int | None = None, custom_data=None):
     d = df.copy()
     if top:
         d = d.head(top)
     if horizontal:
-        fig = px.bar(d, x=y, y=x, orientation="h", title=title)
+        fig = px.bar(d, x=y, y=x, orientation="h", title=title, custom_data=custom_data)
+        fig.update_yaxes(categoryorder="total descending")
     else:
-        fig = px.bar(d, x=x, y=y, title=title)
-    fig.update_traces(marker_color=COLORWAY[0])
+        fig = px.bar(d, x=x, y=y, title=title, custom_data=custom_data)
+    colorir_barras(fig, len(d))
+    return theme_fig(rotular_barras(fig, d[y]))
+
+
+def linha(df: pd.DataFrame, x: str, y: str, title: str, custom_data=None):
+    fig = px.line(df, x=x, y=y, title=title, markers=True, custom_data=custom_data)
     return theme_fig(fig)
 
 
-def linha(df: pd.DataFrame, x: str, y: str, title: str):
-    fig = px.line(df, x=x, y=y, title=title, markers=True)
-    return theme_fig(fig)
+def set_filtro(chave: str):
+    """Retorna callable que define `st.session_state[chave]` — usado no clique-para-filtrar.
+
+    O valor é convertido para string para bater com as opções de `opcoes()`.
+    """
+
+    def _aplicar(valor):
+        st.session_state[chave] = str(valor)
+
+    return _aplicar
+
+
+def plot_click(fig, chave: str, aplicar, **kwargs):
+    """Exibe o gráfico com clique-para-filtrar.
+
+    Quando um ponto é clicado, `aplicar(valor)` é chamado com o primeiro valor
+    do `customdata` do ponto (fallback: eixo de categoria). Passe `custom_data`
+    ao construir a figura para garantir o valor da dimensão filtrada.
+    """
+    def _ao_selecionar():
+        ev = st.session_state.get(chave)
+        if not ev:
+            return
+        sel = getattr(ev, "selection", None)
+        if sel is None and isinstance(ev, dict):
+            sel = ev.get("selection")
+        pts = (sel or {}).get("points") or []
+        if not pts:
+            return
+        p = pts[0]
+        cd = p.get("customdata")
+        if cd:
+            valor = cd[0]
+        elif p.get("y") is not None:
+            valor = p["y"]
+        else:
+            valor = p.get("x")
+        if valor is not None:
+            aplicar(valor)
+
+    st.plotly_chart(
+        fig,
+        on_select=_ao_selecionar,
+        selection_mode="points",
+        key=chave,
+        width="stretch",
+        **kwargs,
+    )
 
 
 def dataframe_estilizado(df: pd.DataFrame, colunas: dict | None = None):
-    st.dataframe(df, column_config=colunas, use_container_width=True, hide_index=True)
+    st.dataframe(df, column_config=colunas, width="stretch", hide_index=True)
+
+
+def _limpar_cache():
+    import queries
+
+    for fn in (
+        queries._frota,
+        queries._gastos,
+        queries._diesel,
+        queries._etanol,
+        queries._estoque,
+        queries._nf_diesel,
+        queries._veiculos_leves,
+    ):
+        try:
+            fn.clear()
+        except Exception:
+            pass
+
+
+def _limpar_filtros(chaves: list[str]):
+    """Callback usado no botão de limpar filtros (roda antes do script)."""
+    for k in chaves:
+        st.session_state[k] = "Todos"
+
+
+def sidebar_acoes(
+    titulo_relatorio: str,
+    figs: list[tuple[str, "go.Figure"]],
+    tabela_pdf: pd.DataFrame | None = None,
+    periodo: str = "",
+    nome_arquivo: str = "relatorio.pdf",
+    chave: str = "relatorio",
+    chaves_filtro: list[str] | None = None,
+):
+    """Botões de ação fixados na barra lateral, abaixo dos filtros.
+
+    - Limpar filtros: aparece quando há filtros ativos (inclusive os aplicados
+      pelo clique nos gráficos) e volta todos para "Todos".
+    - Importar base: permite carregar uma nova `base.xlsx` em sessão.
+    - Atualizar dados: limpa o cache das consultas e recarrega a base.
+    - Gerar PDF: monta um relatório com os gráficos e o detalhamento dos dados.
+    """
+    from relatorio import gerar_pdf
+
+    estado_pdf = f"_{chave}_pdf_bytes"
+
+    with st.sidebar:
+        if chaves_filtro and any(
+            st.session_state.get(k, "Todos") != "Todos" for k in chaves_filtro
+        ):
+            st.button(
+                "🧹 Limpar filtros",
+                use_container_width=True,
+                help='Volta todos os filtros (inclusive os clicados nos gráficos) para "Todos".',
+                on_click=_limpar_filtros,
+                args=(chaves_filtro,),
+            )
+        st.divider()
+        sidebar_importar_base()
+        st.divider()
+        if st.button("🔄 Atualizar dados", use_container_width=True, help="Recarrega os dados da planilha base."):
+            _limpar_cache()
+            st.rerun()
+        if st.button("📄 Gerar PDF", use_container_width=True, help="Gera um relatório com os gráficos e o detalhamento dos dados."):
+            with st.spinner("Gerando relatório..."):
+                try:
+                    st.session_state[estado_pdf] = gerar_pdf(
+                        titulo_relatorio,
+                        figs,
+                        tabela_pdf,
+                        periodo=periodo,
+                        nome_arquivo=nome_arquivo,
+                    )
+                except Exception as exc:
+                    st.session_state[estado_pdf] = None
+                    st.error(f"Falha ao gerar o PDF: {exc}")
+        if st.session_state.get(estado_pdf):
+            st.download_button(
+                "⬇️ Baixar PDF",
+                data=st.session_state[estado_pdf],
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+
+def sidebar_importar_base():
+    """Importa uma nova `base.xlsx` e atualiza os dados imediatamente.
+
+    Funciona localmente e no Cloud (Streamlit Community): o arquivo fica na
+    sessão (em memória), sem precisar gravar nada em disco. Enviar outro
+    arquivo substitui a base em uso.
+    """
+    if st.session_state.pop("_base_importada_msg", False):
+        st.success("Base importada! Dados atualizados em todos os dashboards.")
+
+    if "importar_base_ativo" not in st.session_state:
+        st.session_state["importar_base_ativo"] = False
+    st.toggle(
+        "📥 Importar base",
+        key="importar_base_ativo",
+        help="Carregue uma nova base.xlsx e os dashboards passam a usar os dados dela imediatamente.",
+    )
+    if not st.session_state["importar_base_ativo"]:
+        return
+
+    arquivo = st.file_uploader(
+        "Selecione o arquivo `base.xlsx`",
+        type=["xlsx"],
+        key="importar_base_arquivo",
+    )
+    if arquivo is None:
+        st.caption("Envie uma nova base sempre que quiser atualizar os dados.")
+        return
+
+    dados = arquivo.getvalue()
+    import hashlib
+
+    hash_arquivo = hashlib.sha256(dados).hexdigest()
+    if hash_arquivo == st.session_state.get("_base_ultimo_hash"):
+        return
+
+    try:
+        abas = dl.sheets_do_arquivo(dados)
+    except Exception:
+        abas = []
+    if not abas:
+        st.error("Não foi possível ler o arquivo. Envie um `.xlsx` válido no mesmo modelo da base atual.")
+        return
+
+    faltando = [s for s in dl.SHEETS_REQUERIDAS if s not in abas]
+    if faltando:
+        st.error("O arquivo não contém as abas obrigatórias: " + ", ".join(f"`{s}`" for s in faltando))
+        return
+
+    st.session_state["_base_fonte"] = dados
+    st.session_state["_base_ultimo_hash"] = hash_arquivo
+    _limpar_cache()
+    st.session_state["_base_importada_msg"] = True
+    st.rerun()

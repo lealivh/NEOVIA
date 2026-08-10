@@ -1,3 +1,4 @@
+import io
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -19,19 +20,28 @@ def _read_xml(zf: zipfile.ZipFile, name: str) -> ET.Element:
     return ET.fromstring(zf.read(name))
 
 
-def _load_workbook_xml(path: Path):
-    with zipfile.ZipFile(path) as zf:
+def _open_zip(source: "Path | bytes"):
+    if isinstance(source, bytes):
+        return zipfile.ZipFile(io.BytesIO(source))
+    return zipfile.ZipFile(source)
+
+
+def _load_workbook_xml(source: "Path | bytes"):
+    with _open_zip(source) as zf:
         style_root = _read_xml(zf, "xl/styles.xml")
         xfs = style_root.find("m:cellXfs", NS)
         num_fmts = {
             int(f.get("numFmtId")): f.get("formatCode")
             for f in style_root.findall("m:numFmts/m:numFmt", NS)
         }
-        sst_root = _read_xml(zf, "xl/sharedStrings.xml")
-        shared = [
-            "".join(t.text or "" for t in si.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t"))
-            for si in sst_root.findall("m:si", NS)
-        ]
+        sst_root = None
+        shared = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            sst_root = _read_xml(zf, "xl/sharedStrings.xml")
+            shared = [
+                "".join(t.text or "" for t in si.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t"))
+                for si in sst_root.findall("m:si", NS)
+            ]
         wb_root = _read_xml(zf, "xl/workbook.xml")
         sheets = [
             (s.get("name"), s.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"))
@@ -44,7 +54,12 @@ def _load_workbook_xml(path: Path):
         }
         sheet_names = {}
         for name, rid in sheets:
-            sheet_names[name] = "xl/" + rel_map[rid] if not rel_map[rid].startswith("xl/") else rel_map[rid]
+            target = rel_map[rid]
+            if target.startswith("/"):
+                target = target[1:]
+            elif not target.startswith("xl/"):
+                target = "xl/" + target
+            sheet_names[name] = target
     return style_root, xfs, num_fmts, shared, sheet_names
 
 
@@ -85,9 +100,9 @@ def _cell_value(cell, xfs, num_fmts, shared) -> object:
     return num
 
 
-def _sheet_to_df(path: Path, sheet_name: str):
-    _, xfs, num_fmts, shared, sheet_names = _load_workbook_xml(path)
-    with zipfile.ZipFile(path) as zf:
+def _sheet_to_df(source: "Path | bytes", sheet_name: str):
+    _, xfs, num_fmts, shared, sheet_names = _load_workbook_xml(source)
+    with _open_zip(source) as zf:
         root = _read_xml(zf, sheet_names[sheet_name])
     rows = []
     for row in root.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}row"):
@@ -114,8 +129,13 @@ def _sheet_to_df(path: Path, sheet_name: str):
     return df
 
 
-def _load_sheet(name: str, rename: dict | None = None, date_cols: list[str] | None = None) -> pd.DataFrame:
-    df = _sheet_to_df(BASE_PATH, name)
+def _load_sheet(
+    name: str,
+    rename: dict | None = None,
+    date_cols: list[str] | None = None,
+    source: "Path | bytes | None" = None,
+) -> pd.DataFrame:
+    df = _sheet_to_df(source if source is not None else BASE_PATH, name)
     if rename:
         df = df.rename(columns=rename)
         df = df[[c for c in rename.values() if c in df.columns]]
@@ -139,7 +159,7 @@ def _to_datetime(series: pd.Series) -> pd.Series:
     return dt_str.mask(numeric.notna(), conv)
 
 
-def load_equipamentos() -> pd.DataFrame:
+def load_equipamentos(source: "Path | bytes | None" = None) -> pd.DataFrame:
     df = _load_sheet(
         "EQUIPAMENTOS",
         {
@@ -161,11 +181,12 @@ def load_equipamentos() -> pd.DataFrame:
             "DESMOB.": "data_desmobilizacao",
         },
         date_cols=["data_mobilizacao", "data_entrada", "data_desmobilizacao"],
+        source=source,
     )
     return df
 
 
-def load_gastos() -> pd.DataFrame:
+def load_gastos(source: "Path | bytes | None" = None) -> pd.DataFrame:
     df = _load_sheet(
         "GASTOS",
         {
@@ -187,12 +208,13 @@ def load_gastos() -> pd.DataFrame:
             "Conf": "conf",
         },
         date_cols=["data_nf", "vencimento", "adm"],
+        source=source,
     )
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
     return df
 
 
-def load_diesel() -> pd.DataFrame:
+def load_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
     return _load_sheet(
         "CONSUMO DIESEL EQUIPAMENTOS",
         {
@@ -213,10 +235,11 @@ def load_diesel() -> pd.DataFrame:
             "Consumo": "consumo",
         },
         date_cols=["data_hora"],
+        source=source,
     )
 
 
-def load_etanol() -> pd.DataFrame:
+def load_etanol(source: "Path | bytes | None" = None) -> pd.DataFrame:
     return _load_sheet(
         "CONSUMO VEICULOS LEVES ETANOL",
         {
@@ -263,14 +286,15 @@ def load_etanol() -> pd.DataFrame:
             "TIPO ENTRADA HODOMETRO": "tipo_entrada_hodometro",
         },
         date_cols=["data_transacao"],
+        source=source,
     )
 
 
-def load_estoque() -> pd.DataFrame:
-    return _load_sheet("ESTOQUE")
+def load_estoque(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    return _load_sheet("ESTOQUE", source=source)
 
 
-def load_nf_diesel() -> pd.DataFrame:
+def load_nf_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
     return _load_sheet(
         "NF DIESEL ENTRADAS",
         {
@@ -286,10 +310,11 @@ def load_nf_diesel() -> pd.DataFrame:
             "Valor Unit.": "valor_unitario",
         },
         date_cols=["data_hora"],
+        source=source,
     )
 
 
-def load_veiculos_leves() -> pd.DataFrame:
+def load_veiculos_leves(source: "Path | bytes | None" = None) -> pd.DataFrame:
     return _load_sheet(
         "VEICULOS LEVES",
         {
@@ -301,7 +326,23 @@ def load_veiculos_leves() -> pd.DataFrame:
             "SETOR": "setor",
             "RESPONSÁVEL": "responsavel",
         },
+        source=source,
     )
+
+
+def sheets_do_arquivo(source: "Path | bytes") -> list[str]:
+    """Retorna os nomes das abas (na ordem do workbook) de um .xlsx."""
+    _, _, _, _, sheet_names = _load_workbook_xml(source)
+    return list(sheet_names.keys())
+
+
+SHEETS_REQUERIDAS = [
+    "EQUIPAMENTOS",
+    "GASTOS",
+    "CONSUMO DIESEL EQUIPAMENTOS",
+    "CONSUMO VEICULOS LEVES ETANOL",
+    "VEICULOS LEVES",
+]
 
 
 def norm_empresa(s) -> str:

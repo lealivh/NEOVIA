@@ -4,9 +4,12 @@ from pathlib import Path
 import streamlit as st
 
 from queries import diesel, etanol, frota, gastos, veiculos_leves
-from ui_helpers import LOGO_PATH, fmt_br, fmt_brl, fmt_int, show_logo
+from ui_helpers import LOGO_PATH, css_logo, fmt_br, fmt_brl, fmt_int, show_logo, sidebar_importar_base
 
 st.set_page_config(page_title="Portal de Dashboards", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
+if LOGO_PATH.exists():
+    st.logo(str(LOGO_PATH), size="large")
+css_logo()
 
 DASHES = [
     (
@@ -41,11 +44,17 @@ DASHES = [
     ),
 ]
 
+with st.sidebar:
+    sidebar_importar_base()
+
 show_logo(width=200)
 st.title("Portal de Dashboards — Neovia")
 
 base_file = Path(__file__).parent / "dados" / "base.xlsx"
-if base_file.exists():
+fonte = st.session_state.get("_base_fonte")
+if fonte:
+    st.caption("Base de dados: **arquivo importado na sessão** — atualizado imediatamente.")
+elif base_file.exists():
     mtime = datetime.fromtimestamp(base_file.stat().st_mtime)
     st.caption(f"Base de dados: `{base_file.name}` · atualizada em {mtime:%d/%m/%Y %H:%M}")
 
