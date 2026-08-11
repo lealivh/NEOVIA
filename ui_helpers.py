@@ -1,3 +1,9 @@
+"""Componentes de interface reutilizados pelas páginas.
+
+Concentra: estilos/marca (logo, cores), formatação pt-BR, gráficos Plotly
+padronizados, quadro de equipamentos com ícones, importação da base.xlsx na
+sessão, geração de PDF (barra lateral) e controles de login/permissão.
+"""
 import base64
 import html
 import re
@@ -11,10 +17,12 @@ import streamlit as st
 import data_loader as dl
 from acesso import exigir_login, permissao
 
+# Caminhos fixos dentro do projeto (logo e ícones dos equipamentos).
 PROJ_DIR = Path(__file__).parent
 LOGO_PATH = PROJ_DIR / "assets" / "logo.png"
 ICONES_DIR = PROJ_DIR / "assets" / "icons"
 
+# Paleta da marca (cores do logotipo da Neovia) usada em gráficos e PDF.
 BRAND = {
     "vermelho": "#D00B13",          # vermelho principal do logotipo
     "vermelho_escuro": "#71140F",   # vermelho escuro do degradê
@@ -28,6 +36,7 @@ BRAND = {
     "preto_profundo": "#050505",    # preto profundo da imagem
 }
 
+# Sequência de cores aplicada às barras/linhas dos gráficos.
 COLORWAY = [
     BRAND["vermelho"],
     BRAND["vermelho_escuro"],
@@ -42,6 +51,11 @@ COLORWAY = [
 
 
 def set_page(title: str, icon: str):
+    """Configura a página (título/ícone), logo, CSS e exige login.
+
+    É a primeira função chamada em cada página: sem ela, `exigir_login()` não
+    roda e a tela ficaria acessível sem autenticação.
+    """
     st.set_page_config(page_title=title, page_icon=icon, layout="wide", initial_sidebar_state="expanded")
     if LOGO_PATH.exists():
         st.logo(str(LOGO_PATH), size="large")
@@ -50,46 +64,60 @@ def set_page(title: str, icon: str):
 
 
 def css_logo():
-    """Aumenta a logomarca no topo da barra lateral (st.logo)."""
+    """Aumenta a logomarca no topo da barra lateral (st.logo).
+
+    A largura bate com a do `show_logo(200)` usado no corpo da home, para as
+    duas exibições ficarem parecidas. O PNG da marca já tem o fundo
+    transparente, então a imagem se mistura com o cinza da barra lateral.
+    """
     st.markdown(
-        '<style>[data-testid="stSidebarLogo"]{width:135px !important;height:auto !important;}</style>',
+        '<style>[data-testid="stSidebarLogo"]{width:200px !important;height:auto !important;}</style>',
         unsafe_allow_html=True,
     )
 
 
 def fmt_br(v: float, decimals: int = 2) -> str:
+    """Formata número no padrão brasileiro (1.234,56). `—` para nulos/NaN."""
     if v is None or (isinstance(v, float) and v != v):
         return "—"
+    # Truque: formata com separador de milhar do Python, troca vírgula/ponto.
     return f"{v:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def fmt_brl(v: float) -> str:
+    """Formata valor monetário em reais (R$ 1.234,56)."""
     return "R$ " + fmt_br(v)
 
 
 def fmt_int(v) -> str:
+    """Formata inteiro com separador de milhar brasileiro (1.234)."""
     return f"{int(v):,}".replace(",", ".")
 
 
 def opcoes(series: pd.Series, rotulo: str = "Todos"):
-    """Lista ordenada de opções para filtros, normalizando tipos mistos."""
+    """Lista ordenada de opções para filtros, normalizando tipos mistos.
+
+    Converte tudo em string para o `selectbox`; adiciona a opção "Todos".
+    """
     vals = [str(v) for v in series.dropna().unique().tolist()]
     return [rotulo] + sorted(vals)
 
 
 def show_logo(width: int = 220):
+    """Exibe o logotipo no corpo da página (ex.: home)."""
     if LOGO_PATH.exists():
         st.image(str(LOGO_PATH), width=width)
 
 
 def kpi_cols(items: list[tuple[str, str, str]]):
-    """items: lista de (rótulo, valor, ajuda)."""
+    """Linha de KPIs: cada item é (rótulo, valor, texto de ajuda)."""
     cols = st.columns(len(items))
     for col, (label, value, help_) in zip(cols, items):
         col.metric(label, value, help=help_)
 
 
 def theme_fig(fig):
+    """Aplica o tema padrão (fundo branco, paleta da marca) a uma figura Plotly."""
     fig.update_layout(
         template="plotly_white",
         colorway=COLORWAY,
@@ -129,6 +157,8 @@ def rotular_barras(fig, valores: pd.Series):
     return fig
 
 
+# Mapa de tipos de equipamento → arquivo PNG do ícone (assets/icons/).
+# Tipos sem PNG caem no fallback de emoji (_EMOJI_FALLBACK).
 ICONES_EQUIPAMENTOS = {
     "CAM.BASCULANTE": "Caminhão Basculante.png",
     "CAM. CARROCERIA": "Caminhão Carroceria.png",
@@ -166,6 +196,9 @@ ICONES_EQUIPAMENTOS = {
     "BRITAGEM": "Britador Mandibula.png",
 }
 
+# Fallback: regex (case-insensitive) → emoji quando não há PNG do tipo.
+# A ordem importa: padrões mais específicos vêm primeiro (ex.: TRATOR DE
+# PNEUS antes de TRATOR genérico; TRATOR DE ESTEIRAS vira lagarta, não trator).
 _EMOJI_FALLBACK = [
     (r"TRATOR DE PNEUS", "🚜"),
     (r"TRATOR DE ESTEIRAS?$", "🐛"),
@@ -187,10 +220,11 @@ _EMOJI_FALLBACK = [
 ]
 _EMOJI_PADRAO = "🚧"
 
+# CSS do quadro de equipamentos (cards com ícone, descrição e quantidade).
 _QUADRO_CSS = """
 <style>
 .quadro-card{border:1px solid #CCCCCB;border-radius:10px;padding:14px 8px 10px;background:#FFFFFF;
-text-align:center;margin-bottom:10px;height:100%;}
+ text-align:center;margin-bottom:10px;height:100%;}
 .quadro-card img{width:72px;height:72px;object-fit:contain;}
 .quadro-emoji{font-size:56px;line-height:1;margin:4px 0 8px;}
 .quadro-tipo{font-size:12px;font-weight:600;color:#231F1F;line-height:1.25;min-height:32px;margin:6px 0 4px;}
@@ -200,7 +234,10 @@ text-align:center;margin-bottom:10px;height:100%;}
 
 
 def _icone_equipamento(tipo: str) -> tuple[str | None, str | None]:
-    """Retorna (caminho_do_png | None, emoji | None) para o tipo de equipamento."""
+    """Retorna (caminho_do_png | None, emoji | None) para o tipo de equipamento.
+
+    Prioridade: PNG específico > emoji de fallback > emoji padrão.
+    """
     nome = ICONES_EQUIPAMENTOS.get(tipo)
     if nome:
         path = ICONES_DIR / nome
@@ -229,6 +266,7 @@ def quadro_equipamentos(
     if not itens:
         st.caption("Nenhum tipo de equipamento no filtro atual.")
         return
+    # Organiza os cards em linhas com `cols_por_linha` colunas.
     for i in range(0, len(itens), cols_por_linha):
         cols = st.columns(cols_por_linha)
         for col, item in zip(cols, itens[i : i + cols_por_linha]):
@@ -237,6 +275,7 @@ def quadro_equipamentos(
             img, emoji = _icone_equipamento(tipo)
             with col:
                 if img:
+                    # PNG embutido em base64 para não depender de arquivo externo.
                     with open(img, "rb") as f:
                         b64 = base64.b64encode(f.read()).decode()
                     corpo = f'<img src="data:image/png;base64,{b64}" alt="">'
@@ -260,6 +299,11 @@ def quadro_equipamentos(
 
 
 def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, top: int | None = None, custom_data=None):
+    """Gráfico de barras padronizado com paleta, rótulos e ordem correta.
+
+    Em barras horizontais, o Plotly coloca a 1ª categoria na base do eixo Y;
+    `categoryorder="total ascending"` deixa o maior valor no topo.
+    """
     d = df.copy()
     if top:
         d = d.head(top)
@@ -273,6 +317,7 @@ def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, 
 
 
 def linha(df: pd.DataFrame, x: str, y: str, title: str, custom_data=None):
+    """Gráfico de linhas com marcadores (ex.: evolução mensal)."""
     fig = px.line(df, x=x, y=y, title=title, markers=True, custom_data=custom_data)
     return theme_fig(fig)
 
@@ -297,6 +342,7 @@ def plot_click(fig, chave: str, aplicar, **kwargs):
     ao construir a figura para garantir o valor da dimensão filtrada.
     """
     def _ao_selecionar():
+        # Evento de seleção gerado pelo Streamlit (atributo `selection`).
         ev = st.session_state.get(chave)
         if not ev:
             return
@@ -307,6 +353,7 @@ def plot_click(fig, chave: str, aplicar, **kwargs):
         if not pts:
             return
         p = pts[0]
+        # Prefere o customdata (dimensão filtrada) e recua para o eixo.
         cd = p.get("customdata")
         if cd:
             valor = cd[0]
@@ -328,6 +375,7 @@ def plot_click(fig, chave: str, aplicar, **kwargs):
 
 
 def dataframe_estilizado(df: pd.DataFrame, colunas: dict | None = None):
+    """Exibe um dataframe em largura total, sem o índice."""
     st.dataframe(df, column_config=colunas, width="stretch", hide_index=True)
 
 
@@ -346,6 +394,7 @@ def converter_datas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
 
 
 def _limpar_cache():
+    """Limpa o cache de todas as consultas (usado ao importar/atualizar base)."""
     import queries
 
     for fn in (
@@ -388,6 +437,7 @@ def sidebar_acoes(
     """
     from relatorio import gerar_pdf
 
+    # Chave na sessão onde os bytes do PDF gerado ficam guardados até baixar.
     estado_pdf = f"_{chave}_pdf_bytes"
 
     with st.sidebar:
@@ -437,9 +487,11 @@ def sidebar_importar_base():
     sessão (em memória), sem precisar gravar nada em disco. Enviar outro
     arquivo substitui a base em uso.
     """
+    # Mensagem de confirmação exibida uma única vez após a importação.
     if st.session_state.pop("_base_importada_msg", False):
         st.success("Base importada! Dados atualizados em todos os dashboards.")
 
+    # Usuário sem permissão só vê o aviso e não o widget de upload.
     if not permissao("pode_importar"):
         st.caption("Sem permissão para importar a base — solicite a um administrador.")
         return
@@ -466,10 +518,12 @@ def sidebar_importar_base():
     dados = arquivo.getvalue()
     import hashlib
 
+    # Evita reprocessar o mesmo arquivo já enviado.
     hash_arquivo = hashlib.sha256(dados).hexdigest()
     if hash_arquivo == st.session_state.get("_base_ultimo_hash"):
         return
 
+    # Valida o arquivo: precisa ser .xlsx com as abas obrigatórias.
     try:
         abas = dl.sheets_do_arquivo(dados)
     except Exception:
@@ -483,6 +537,7 @@ def sidebar_importar_base():
         st.error("O arquivo não contém as abas obrigatórias: " + ", ".join(f"`{s}`" for s in faltando))
         return
 
+    # Guarda os bytes na sessão, limpa o cache das consultas e recarrega.
     st.session_state["_base_fonte"] = dados
     st.session_state["_base_ultimo_hash"] = hash_arquivo
     _limpar_cache()

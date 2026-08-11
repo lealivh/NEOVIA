@@ -1,3 +1,10 @@
+"""Leitura da base.xlsx (Excel) sem dependência de engine.
+
+Em vez de usar pandas + openpyxl (pesado no Cloud e às vezes quebra com
+arquivos grandes), este módulo lê o pacote .xlsx (que é um ZIP de XML) direto,
+interpretando estilos, datas e strings compartilhadas. Também mapeia as
+colunas originais da planilha para nomes canônicos usados pelos dashboards.
+"""
 import io
 import zipfile
 import xml.etree.ElementTree as ET
@@ -6,9 +13,12 @@ from pathlib import Path
 
 import pandas as pd
 
+# Caminho padrão da base quando nenhum upload é feito.
 BASE_PATH = Path(__file__).parent / "dados" / "base.xlsx"
 
+# Epoch do Excel: 30/12/1899 (o "bug do ano 1900" faz a referência ser essa).
 EXCEL_EPOCH = datetime(1899, 12, 30)
+# Namespace principal do XML do Excel (spreadsheetml).
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 # numFmtIds considerados datas/datetimes
@@ -17,23 +27,33 @@ TIME_FMT_IDS = {44}
 
 
 def _read_xml(zf: zipfile.ZipFile, name: str) -> ET.Element:
+    """Lê um XML de dentro do pacote .xlsx e retorna a raiz parseada."""
     return ET.fromstring(zf.read(name))
 
 
 def _open_zip(source: "Path | bytes"):
+    """Abre o .xlsx como ZIP, aceitando caminho no disco ou bytes (upload)."""
     if isinstance(source, bytes):
         return zipfile.ZipFile(io.BytesIO(source))
     return zipfile.ZipFile(source)
 
 
 def _load_workbook_xml(source: "Path | bytes"):
+    """Extrai o que é necessário para ler células: estilos, datas, strings e abas.
+
+    Retorna (styles_root, cellXfs, numFmts, sharedStrings, sheet_names).
+    `sheet_names` mapeia o nome da aba → caminho interno do XML (ex.:
+    "GASTOS" → "xl/worksheets/sheet3.xml").
+    """
     with _open_zip(source) as zf:
+        # Estilos: associação numFmtId → formato (identifica datas).
         style_root = _read_xml(zf, "xl/styles.xml")
         xfs = style_root.find("m:cellXfs", NS)
         num_fmts = {
             int(f.get("numFmtId")): f.get("formatCode")
             for f in style_root.findall("m:numFmts/m:numFmt", NS)
         }
+        # Strings compartilhadas: valores de texto referenciados por índice.
         sst_root = None
         shared = []
         if "xl/sharedStrings.xml" in zf.namelist():
@@ -42,6 +62,7 @@ def _load_workbook_xml(source: "Path | bytes"):
                 "".join(t.text or "" for t in si.iter("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t"))
                 for si in sst_root.findall("m:si", NS)
             ]
+        # Relação nome da aba → arquivo XML interno.
         wb_root = _read_xml(zf, "xl/workbook.xml")
         sheets = [
             (s.get("name"), s.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"))
@@ -64,7 +85,13 @@ def _load_workbook_xml(source: "Path | bytes"):
 
 
 def _cell_value(cell, xfs, num_fmts, shared) -> object:
+    """Converte uma célula XML para o valor Python correspondente.
+
+    Tipos tratados: string inline, string compartilhada (`t="s"`), texto
+    calculado (`t="str"`), número, data/hora (via numFmtId) e booleano.
+    """
     t = cell.get("t")
+    # Texto embutido diretamente na célula (raro no Excel moderno).
     if t == "inlineStr":
         is_node = cell.find("m:is", NS)
         if is_node is None:
@@ -74,18 +101,20 @@ def _cell_value(cell, xfs, num_fmts, shared) -> object:
     if v_node is None or v_node.text is None:
         return None
     raw = v_node.text
-    if t == "s":
+    if t == "s":  # string compartilhada (referenciada por índice).
         return shared[int(raw)]
-    if t == "str":
+    if t == "str":  # texto resultado de fórmula.
         return raw
     try:
         num = float(raw)
     except ValueError:
         return raw
+    # Guarda o inteiro quando o valor não tem parte decimal.
     if num == int(num):
         ival = int(num)
     else:
         ival = None
+    # Descobre o formato da célula (numFmtId) para identificar datas.
     style_idx = cell.get("s")
     fmt_id = 0
     if style_idx is not None and xfs is not None:
@@ -101,6 +130,11 @@ def _cell_value(cell, xfs, num_fmts, shared) -> object:
 
 
 def _sheet_to_df(source: "Path | bytes", sheet_name: str):
+    """Lê uma aba inteira e devolve um DataFrame (1ª linha = cabeçalho).
+
+    As células são posicionadas pela referência de coluna (A, B, C...) para
+    não depender da ordem dos nós no XML.
+    """
     _, xfs, num_fmts, shared, sheet_names = _load_workbook_xml(source)
     with _open_zip(source) as zf:
         root = _read_xml(zf, sheet_names[sheet_name])
@@ -109,11 +143,13 @@ def _sheet_to_df(source: "Path | bytes", sheet_name: str):
         cells = {}
         for c in row.findall("m:c", NS):
             col_ref = c.get("r")
+            # Extrai a(s) letra(s) da referência ("B12" -> "B").
             col_letter = "".join(ch for ch in col_ref if ch.isalpha()) if col_ref else None
             cells[col_letter] = _cell_value(c, xfs, num_fmts, shared)
         rows.append(cells)
     if not rows:
         return pd.DataFrame()
+    # Alinha as células em listas de tamanho fixo usando o índice A=0.
     max_cols = max(len(r) for r in rows)
     ordered = []
     for r in rows:
@@ -124,7 +160,9 @@ def _sheet_to_df(source: "Path | bytes", sheet_name: str):
                 if 0 <= idx < max_cols:
                     row_vals[idx] = v
         ordered.append(row_vals)
+    # A 1ª linha vira o cabeçalho (limpa quebras de linha e espaços).
     df = pd.DataFrame(ordered[1:], columns=[str(h).strip().replace("\n", " ") if h is not None else "" for h in ordered[0]])
+    # Remove colunas duplicadas (nome igual repetido no cabeçalho).
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
@@ -135,6 +173,11 @@ def _load_sheet(
     date_cols: list[str] | None = None,
     source: "Path | bytes | None" = None,
 ) -> pd.DataFrame:
+    """Carrega uma aba, renomeia colunas e converte colunas de data.
+
+    `rename`: dicionário {nome_original: nome_canonico}. Depois do rename o
+    DataFrame fica só com as colunas mapeadas, na ordem do dicionário.
+    """
     df = _sheet_to_df(source if source is not None else BASE_PATH, name)
     if rename:
         df = df.rename(columns=rename)
@@ -146,20 +189,30 @@ def _load_sheet(
 
 
 def _to_datetime(series: pd.Series) -> pd.Series:
+    """Converte uma coluna mista (números do Excel e/ou texto) em datetime.
+
+    - Números são interpretados como dias desde o epoch do Excel (1900).
+    - Textos são interpretados por pd.to_datetime.
+    - Valores já datetime passam direto.
+    """
     if pd.api.types.is_datetime64_any_dtype(series):
         return pd.to_datetime(series)
     numeric = pd.to_numeric(series, errors="coerce")
+    # Converte os números "plausíveis de data" (1..75000 dias) via timedelta.
     conv = pd.to_datetime(
         EXCEL_EPOCH + pd.to_timedelta(numeric.where(numeric.between(1, 75_000)), unit="D"),
         errors="coerce",
     )
     if pd.api.types.is_numeric_dtype(series):
         return conv
+    # Colunas mistas: mantém a conversão numérica onde havia número e a de
+    # texto nas demais posições.
     dt_str = pd.to_datetime(series, errors="coerce")
     return dt_str.mask(numeric.notna(), conv)
 
 
 def load_equipamentos(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba EQUIPAMENTOS: frota de máquinas (situação, status, locador, datas...)."""
     df = _load_sheet(
         "EQUIPAMENTOS",
         {
@@ -187,6 +240,7 @@ def load_equipamentos(source: "Path | bytes | None" = None) -> pd.DataFrame:
 
 
 def load_gastos(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba GASTOS: notas fiscais de peças/serviços e manutenções."""
     df = _load_sheet(
         "GASTOS",
         {
@@ -210,11 +264,13 @@ def load_gastos(source: "Path | bytes | None" = None) -> pd.DataFrame:
         date_cols=["data_nf", "vencimento", "adm"],
         source=source,
     )
+    # Garante que o valor seja numérico (pode vir como texto na planilha).
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce")
     return df
 
 
 def load_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba CONSUMO DIESEL EQUIPAMENTOS: abastecimentos de diesel da frota."""
     return _load_sheet(
         "CONSUMO DIESEL EQUIPAMENTOS",
         {
@@ -240,6 +296,7 @@ def load_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
 
 
 def load_etanol(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba CONSUMO VEICULOS LEVES ETANOL: abastecimentos de veículos leves."""
     return _load_sheet(
         "CONSUMO VEICULOS LEVES ETANOL",
         {
@@ -291,10 +348,12 @@ def load_etanol(source: "Path | bytes | None" = None) -> pd.DataFrame:
 
 
 def load_estoque(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba ESTOQUE (sem renomear — estrutura usada crua se necessário)."""
     return _load_sheet("ESTOQUE", source=source)
 
 
 def load_nf_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba NF DIESEL ENTRADAS: notas de entrada de diesel por ponto."""
     return _load_sheet(
         "NF DIESEL ENTRADAS",
         {
@@ -315,6 +374,7 @@ def load_nf_diesel(source: "Path | bytes | None" = None) -> pd.DataFrame:
 
 
 def load_veiculos_leves(source: "Path | bytes | None" = None) -> pd.DataFrame:
+    """Aba VEICULOS LEVES: cadastro das placas → setor/responsável."""
     return _load_sheet(
         "VEICULOS LEVES",
         {
@@ -336,6 +396,7 @@ def sheets_do_arquivo(source: "Path | bytes") -> list[str]:
     return list(sheet_names.keys())
 
 
+# Abas que um arquivo válido precisa conter (validação do upload).
 SHEETS_REQUERIDAS = [
     "EQUIPAMENTOS",
     "GASTOS",
@@ -346,13 +407,18 @@ SHEETS_REQUERIDAS = [
 
 
 def norm_empresa(s) -> str:
-    """Normaliza a empresa/terceiro para exibição nos dashboards."""
+    """Normaliza a empresa/terceiro para exibição nos dashboards.
+
+    Unifica grafias diferentes da mesma empresa (ex.: "NEOVIA CONST. (NEO)" e
+    "NEOVIA" → "Neovia") e trata vazios como "Não informado".
+    """
     if s is None:
         return "Não informado"
     t = str(s).strip()
     if t in ("", "-"):
         return "Não informado"
     up = t.upper()
+    # "NEOVIA - FILIAL 2" vira "NEOVIA" (considera só o trecho antes de " - ").
     if " - " in up:
         up = up.split(" - ")[0].strip()
     alias = {
@@ -412,4 +478,5 @@ def norm_empresa(s) -> str:
         "NEOVIA": "Neovia",
         "SUL": "Sul",
     }
+    # Sem alias: título apenas se o original não estava em maiúsculas.
     return alias.get(up, t.title() if not t.isupper() else t)

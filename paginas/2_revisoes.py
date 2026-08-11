@@ -1,3 +1,8 @@
+"""Revisões Preventivas: gastos com manutenção preventiva.
+
+Filtra os GASTOS classificados como PREVENTIVA, com filtros de fornecedor,
+aplicação e competência (mês), gráficos por frota e evolução mensal, e PDF.
+"""
 import pandas as pd
 import streamlit as st
 
@@ -12,12 +17,14 @@ st.title("Revisões Preventivas")
 if not base_carregada():
     prompt_sem_base()
 
+# Aviso: horímetro/plano de manutenção ainda não existem na base.
 st.info(
     "Os dados de horímetro / plano de manutenção ainda não constam na planilha base. "
     "Este painel é alimentado pelos gastos classificados como **PREVENTIVA** em GASTOS e será evoluído "
     "quando a base passar a incluir horímetro do último/próximo plano e horas restantes."
 )
 
+# Somente lançamentos de manutenção preventiva.
 df = gastos()
 prev = df[df["classe_manut"].str.upper().str.strip() == "PREVENTIVA"].copy()
 
@@ -25,6 +32,7 @@ if prev.empty:
     st.warning("Nenhum lançamento classificado como PREVENTIVA encontrado na base.")
     st.stop()
 
+# Colunas derivadas para os filtros de competência e os agrupamentos.
 prev["mes"] = prev["data_nf"].dt.to_period("M").astype(str)
 prev["empresa"] = prev["locadora"].fillna("Não informado")
 
@@ -35,6 +43,7 @@ with st.sidebar:
     meses = ["Todos"] + sorted(prev["mes"].dropna().unique().tolist(), reverse=True)
     mes = st.selectbox("Competência", meses, key="filtro_rev_mes")
 
+# Aplica os filtros (fornecedor, aplicação e competência).
 f = prev
 if fornecedor != "Todos":
     f = f[f["fornecedor"] == fornecedor]
@@ -43,6 +52,7 @@ if aplicacao != "Todos":
 if mes != "Todos":
     f = f[f["mes"] == mes]
 
+# KPIs do recorte filtrado.
 kpi_cols(
     [
         ("Revisões preventivas", fmt_int(len(f)), "Lançamentos classificados como PREVENTIVA"),
@@ -54,6 +64,7 @@ kpi_cols(
 
 col1, col2 = st.columns(2)
 with col1:
+    # Top 15 frotas/aplicações em valor (barra clicável filtra a aplicação).
     por_frota = (
         f.groupby("aplicacao")["valor"]
         .sum()
@@ -66,11 +77,13 @@ with col1:
     plot_click(fig_frota, "chart_rev_frota", set_filtro("filtro_rev_aplicacao"))
 
 with col2:
+    # Evolução mensal (clique no ponto filtra o mês correspondente).
     mensal = f.groupby("mes")["valor"].sum().reset_index().rename(columns={"mes": "Mês", "valor": "Valor"})
     fig_mensal = linha(mensal, x="Mês", y="Valor", title="Evolução mensal", custom_data=["Mês"])
     figs.append(("Evolução mensal dos gastos preventivos", fig_mensal))
     plot_click(fig_mensal, "chart_rev_mensal", set_filtro("filtro_rev_mes"))
 
+# Detalhamento em aba, com as notas ordenadas pela data (mais recente primeiro).
 with st.expander("📋 Detalhamento", expanded=False):
     cols = ["data_nf", "numero_nf", "fornecedor", "aplicacao", "equipe", "valor", "obs"]
     visiveis = [c for c in cols if c in f.columns]

@@ -1,3 +1,10 @@
+"""Home do portal: cartões de acesso aos dashboards e resumo geral da base.
+
+É a primeira página listada pelo `st.navigation` do `app.py`. Mostra alguns
+KPIs agregados (equipamentos, ativos, gastos e litros) e links para cada
+dashboard. Como o arquivo não começa com número, o Streamlit a ordena como
+primeira página (prefixo `0_`).
+"""
 from datetime import datetime
 from pathlib import Path
 
@@ -6,6 +13,7 @@ import streamlit as st
 from queries import diesel, etanol, frota, gastos, veiculos_leves
 from ui_helpers import LOGO_PATH, base_carregada, css_logo, fmt_br, fmt_brl, fmt_int, prompt_sem_base, show_logo, sidebar_importar_base
 
+# Configuração da página precisa ser o primeiro comando do Streamlit.
 st.set_page_config(page_title="Portal de Dashboards", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
 if LOGO_PATH.exists():
     st.logo(str(LOGO_PATH), size="large")
@@ -13,8 +21,10 @@ css_logo()
 
 from acesso import exigir_login
 
+# Bloqueia a página para quem não está logado / não tem permissão.
 exigir_login()
 
+# Cards da home: (ícone, título, descrição, caminho do arquivo da página).
 DASHES = [
     (
         "🚜",
@@ -54,6 +64,7 @@ with st.sidebar:
 show_logo(width=200)
 st.title("Portal de Dashboards — Neovia")
 
+# Indica a origem da base em uso (importada na sessão ou arquivo padrão).
 base_file = Path(__file__).parent / "dados" / "base.xlsx"
 fonte = st.session_state.get("_base_fonte")
 if fonte:
@@ -62,16 +73,19 @@ elif base_file.exists():
     mtime = datetime.fromtimestamp(base_file.stat().st_mtime)
     st.caption(f"Base de dados: `{base_file.name}` · atualizada em {mtime:%d/%m/%Y %H:%M}")
 
+# Sem base válida, orienta o usuário antes de seguir (upload desabilitado aqui).
 if not base_carregada():
     prompt_sem_base(mostrar_upload=False)
 
 st.markdown("---")
 
+# Pré-carrega as tabelas (com cache) para alimentar os KPIs do resumo.
 df_frota = frota()
 df_gastos = gastos()
 df_diesel = diesel()
 df_etanol = etanol()
 
+# KPIs globais do portal.
 ativos = int((df_frota["situacao"] == "ATIVO").sum())
 equip_frota = df_frota["prefixo"].nunique()
 c1, c2, c3, c4 = st.columns(4)

@@ -1,3 +1,9 @@
+"""KPIs de Abastecimento (Veículos Leves): preço médio, equipe, consumo.
+
+Base: aba CONSUMO VEICULOS LEVES ETANOL, enriquecida com o setor (equipe) de
+cada placa vindo da aba VEICULOS LEVES. Inclui preço médio do litro, gasto por
+equipe/veículo e consumo médio (km/L) por placa.
+"""
 import pandas as pd
 import streamlit as st
 import plotly.express as px
@@ -13,6 +19,7 @@ st.title("KPIs de Abastecimento (Veículos Leves)")
 if not base_carregada():
     prompt_sem_base()
 
+# Limpeza e colunas derivadas (preço por litro, ano/mês/período).
 df = etanol().copy()
 df = df[df["valor"].notna() & df["litros"].notna()]
 df["data_transacao"] = pd.to_datetime(df["data_transacao"])
@@ -22,9 +29,11 @@ df["mes"] = df["data_transacao"].dt.month
 df["periodo"] = df["data_transacao"].dt.to_period("M").astype(str)
 df["preco"] = df["valor"] / df["litros"]
 
+# Equipe mapeada pela placa na aba VEICULOS LEVES.
 setor_map = veiculos_leves().dropna(subset=["placa"]).set_index("placa")["setor"].to_dict()
 df["equipe"] = df["placa"].map(setor_map).fillna("Não identificada")
 
+# Anos/meses disponíveis para os filtros.
 anos = sorted(df["ano"].dropna().unique().tolist())
 meses = sorted(df["mes"].dropna().unique().tolist())
 
@@ -37,6 +46,7 @@ with st.sidebar:
     posto = st.selectbox("Posto", opcoes(df["estabelecimento"]), key="filtro_kpi_posto")
     equipe = st.selectbox("Equipe", opcoes(df["equipe"]), key="filtro_kpi_equipe")
 
+# Aplica os filtros selecionados.
 f = df
 if ano != "Todos":
     f = f[f["ano"] == int(ano)]
@@ -53,6 +63,7 @@ if equipe != "Todos":
 
 
 def _filtra_periodo(v):
+    """Callback do clique nos gráficos: converte "YYYY-MM" em filtros ano/mês."""
     if isinstance(v, str) and "-" in v:
         ano_s, mes_s = v.split("-")[:2]
         st.session_state["filtro_kpi_ano"] = ano_s
@@ -70,12 +81,14 @@ kpi_cols(
 
 col1, col2 = st.columns(2)
 with col1:
+    # Evolução do preço médio do litro por mês (clique filtra o período).
     preco = f.groupby("periodo")["preco"].mean().reset_index().rename(columns={"periodo": "Período", "preco": "Preço médio (R$/L)"})
     fig_preco = theme_fig(px.line(preco, x="Período", y="Preço médio (R$/L)", title="Evolução do preço médio do litro", markers=True, custom_data=["Período"]))
     figs = [("Evolução do preço médio do litro", fig_preco)]
     plot_click(fig_preco, "chart_kpi_preco", _filtra_periodo)
 
 with col2:
+    # Top 12 equipes por gasto com combustível (clique filtra a equipe).
     por_equipe = f.groupby("equipe")["valor"].sum().nlargest(12).reset_index()
     fig_equipe = bar(por_equipe, x="equipe", y="valor", title="Gasto com combustível por equipe (12 itens)", horizontal=True, custom_data=["equipe"])
     figs.append(("Gasto com combustível por equipe (12 itens)", fig_equipe))
@@ -83,20 +96,24 @@ with col2:
 
 col3, col4 = st.columns(2)
 with col3:
+    # Top 12 veículos por total gasto (clique filtra a placa).
     por_veiculo = f.groupby("placa")["valor"].sum().nlargest(12).reset_index()
     fig_veiculo = bar(por_veiculo, x="placa", y="valor", title="Total gasto por veículo (12 itens)", horizontal=True, custom_data=["placa"])
     figs.append(("Total gasto por veículo (12 itens)", fig_veiculo))
     plot_click(fig_veiculo, "chart_kpi_veiculo", set_filtro("filtro_kpi_placa"))
 
 with col4:
+    # Consumo médio (km/L): soma km e litros por placa, com sanitização.
     km = (
         f.assign(
             km_rodados=pd.to_numeric(f["km_rodados"], errors="coerce"),
             litros=pd.to_numeric(f["litros"], errors="coerce"),
         )
+        # Ignora lançamentos com km fora da faixa plausível (1–2500) e litros 0.
         .loc[lambda d: d["km_rodados"].between(1, 2500) & d["litros"].gt(0)]
         .groupby("placa")
         .agg(km_total=("km_rodados", "sum"), litros_total=("litros", "sum"), n=("placa", "size"))
+        # Pede ao menos 3 abastecimentos para uma média confiável.
         .loc[lambda d: d["n"] >= 3]
         .assign(km_litro=lambda d: d["km_total"] / d["litros_total"])
     )
@@ -108,6 +125,7 @@ with col4:
     figs.append(("Consumo médio por veículo (km/L, 12 itens)", fig_consumo))
     plot_click(fig_consumo, "chart_kpi_consumo", set_filtro("filtro_kpi_placa"))
 
+# Detalhamento dos abastecimentos (mais recentes primeiro).
 with st.expander("📋 Detalhamento", expanded=False):
     cols = ["data_transacao", "placa", "motorista", "equipe", "modelo", "estabelecimento", "litros", "preco", "km_litro", "valor"]
     visiveis = [c for c in cols if c in f.columns]
