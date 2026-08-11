@@ -260,7 +260,7 @@ def load_etanol(source: "Path | bytes | None" = None) -> pd.DataFrame:
             "LITROS": "litros",
             "VL/LITRO": "vl_litro",
             "HODOMETRO OU HORIMETRO": "hodometro",
-            "KM RODADOS OU HORAS TRABALHADA": "km_rodados",
+            "KM RODADOS OU HORAS TRABALHADAS": "km_rodados",
             "KM/LITRO OU LITROS/HORA": "km_litro",
             "VALOR EMISSAO": "valor",
             "CODIGO ESTABELECIMENTO": "cod_estabelecimento",

@@ -89,14 +89,18 @@ with col3:
     plot_click(fig_veiculo, "chart_kpi_veiculo", set_filtro("filtro_kpi_placa"))
 
 with col4:
-    consumo = (
-        f.assign(km_litro=pd.to_numeric(f["km_litro"], errors="coerce"))
-        .loc[lambda d: d["km_litro"].notna()]
-        .groupby("placa")["km_litro"]
-        .mean()
-        .nlargest(12)
-        .reset_index()
+    km = (
+        f.assign(
+            km_rodados=pd.to_numeric(f["km_rodados"], errors="coerce"),
+            litros=pd.to_numeric(f["litros"], errors="coerce"),
+        )
+        .loc[lambda d: d["km_rodados"].between(1, 2500) & d["litros"].gt(0)]
+        .groupby("placa")
+        .agg(km_total=("km_rodados", "sum"), litros_total=("litros", "sum"), n=("placa", "size"))
+        .loc[lambda d: d["n"] >= 3]
+        .assign(km_litro=lambda d: d["km_total"] / d["litros_total"])
     )
+    consumo = km["km_litro"].nlargest(12).reset_index()
     fig_consumo = theme_fig(px.bar(consumo, x="km_litro", y="placa", orientation="h", title="Consumo médio por veículo (km/L, 12 itens)", custom_data=["placa"]))
     fig_consumo.update_yaxes(categoryorder="total ascending")
     fig_consumo = colorir_barras(fig_consumo, len(consumo))
