@@ -64,7 +64,7 @@ tipos = (
 # A lista de ícones fica oculta por padrão, igual ao Detalhamento.
 with st.expander("🖼️ Ícones dos equipamentos", expanded=False):
     quadro_equipamentos(tipos, col_tipo="classe_operacional", col_qtd="quantidade", ao_filtrar=set_filtro("filtro_frota_classe"))
-fig_tipos = bar(tipos, x="classe_operacional", y="quantidade", title="Quantidade por tipo de equipamento", horizontal=True, custom_data=["classe_operacional"], bar_width=0.95)
+fig_tipos = bar(tipos, x="classe_operacional", y="quantidade", title="Quantidade por tipo de equipamento", horizontal=True, custom_data=["classe_operacional"], bar_width=1.15)
 plot_click(fig_tipos, "chart_frota_tipos", set_filtro("filtro_frota_classe"))
 figs = [("Quantidade por tipo de equipamento", fig_tipos)]
 
