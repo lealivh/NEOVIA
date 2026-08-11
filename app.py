@@ -8,21 +8,36 @@ import streamlit as st
 
 @st.cache_resource
 def _aquecer_kaleido():
-    """Pré-carrega o Chromium do kaleido.
+    """Pré-carrega o Chromium do kaleido para os gráficos do PDF.
 
-    O kaleido usa um navegador embutido para converter gráficos do Plotly em
-    PNG. Na primeira chamada ele baixa esse executável, o que pode demorar e
-    até falhar dentro do Streamlit. Aquecer na inicialização evita que a
-    primeira geração de PDF (a mais demorada) aconteça na hora do clique.
+    O kaleido v1+ precisa de um Chrome instalado (procura em `BROWSER_PATH`
+    ou no PATH). No Streamlit Cloud não há navegador, então se a renderização
+    inicial falhar, baixa um Chrome for Testing via `kaleido.get_chrome_sync()`
+    e aponta `BROWSER_PATH` para ele. Sem isso, os gráficos somem do PDF.
     """
     try:
+        import os
+
         import plotly.graph_objects as go
 
-        # Gera um PNG de 1x1: suficiente para disparar o download do Chromium.
+        # Gera um PNG de 1x1: suficiente para disparar a renderização.
         go.Figure().to_image(format="png", width=1, height=1)
     except Exception:
-        # Se falhar aqui, o PDF ainda tenta renderizar depois (com retry).
-        pass
+        # Sem Chrome no ambiente: baixa um e tenta de novo (ex.: Cloud).
+        try:
+            import os
+
+            import kaleido
+
+            caminho = kaleido.get_chrome_sync(verbose=False)
+            if caminho:
+                os.environ["BROWSER_PATH"] = str(caminho)
+            import plotly.graph_objects as go
+
+            go.Figure().to_image(format="png", width=1, height=1)
+        except Exception:
+            # Se ainda falhar, o PDF tenta renderizar depois (com retry).
+            pass
 
 
 _aquecer_kaleido()
