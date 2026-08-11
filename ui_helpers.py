@@ -304,11 +304,12 @@ def quadro_equipamentos(
                     )
 
 
-def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, top: int | None = None, custom_data=None):
+def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, top: int | None = None, custom_data=None, bar_width: float | None = None):
     """Gráfico de barras padronizado com paleta, rótulos e ordem correta.
 
     Em barras horizontais, o Plotly coloca a 1ª categoria na base do eixo Y;
     `categoryorder="total ascending"` deixa o maior valor no topo.
+    `bar_width` ajusta a espessura das barras (fração da faixa, padrão 0.8).
     """
     d = df.copy()
     if top:
@@ -318,6 +319,8 @@ def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, 
         fig.update_yaxes(categoryorder="total ascending")
     else:
         fig = px.bar(d, x=x, y=y, title=title, custom_data=custom_data)
+    if bar_width:
+        fig.update_traces(width=bar_width)
     colorir_barras(fig, len(d))
     return theme_fig(rotular_barras(fig, d[y]))
 
