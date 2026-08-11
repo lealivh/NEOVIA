@@ -198,10 +198,10 @@ ICONES_EQUIPAMENTOS = {
 
 # Fallback: regex (case-insensitive) → emoji quando não há PNG do tipo.
 # A ordem importa: padrões mais específicos vêm primeiro (ex.: TRATOR DE
-# PNEUS antes de TRATOR genérico; TRATOR DE ESTEIRAS vira lagarta, não trator).
+# PNEUS antes de TRATOR genérico).
 _EMOJI_FALLBACK = [
     (r"TRATOR DE PNEUS", "🚜"),
-    (r"TRATOR DE ESTEIRAS?$", "🐛"),
+    (r"TRATOR DE ESTEIRAS?$", "🚜"),
     (r"TRATOR", "🚜"),
     (r"BOMBA", "🚛"),
     (r"BETONEIRA", "🚚"),
@@ -213,7 +213,7 @@ _EMOJI_FALLBACK = [
     (r"ROMPEDOR", "⛏️"),
     (r"CARRETINHA", "🚛"),
     (r"RECICLADORA", "⚙️"),
-    (r"RETROESCAVADEIRA", "🚧"),
+    (r"RETROESCAVADEIRA", "🚜"),
     (r"VALETADEIRA|MOTONIVELADORA|ESTABILIZADORA", "🚜"),
     (r"DISTRIBUIDOR|CONSERVA", "🚚"),
     (r"CAM\.", "🚚"),
