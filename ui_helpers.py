@@ -261,7 +261,7 @@ def bar(df: pd.DataFrame, x: str, y: str, title: str, horizontal: bool = False, 
         d = d.head(top)
     if horizontal:
         fig = px.bar(d, x=y, y=x, orientation="h", title=title, custom_data=custom_data)
-        fig.update_yaxes(categoryorder="total descending")
+        fig.update_yaxes(categoryorder="total ascending")
     else:
         fig = px.bar(d, x=x, y=y, title=title, custom_data=custom_data)
     colorir_barras(fig, len(d))

@@ -98,7 +98,7 @@ with col4:
         .reset_index()
     )
     fig_consumo = theme_fig(px.bar(consumo, x="km_litro", y="placa", orientation="h", title="Consumo médio por veículo (km/L, 12 itens)", custom_data=["placa"]))
-    fig_consumo.update_yaxes(categoryorder="total descending")
+    fig_consumo.update_yaxes(categoryorder="total ascending")
     fig_consumo = colorir_barras(fig_consumo, len(consumo))
     fig_consumo = rotular_barras(fig_consumo, consumo["km_litro"])
     figs.append(("Consumo médio por veículo (km/L, 12 itens)", fig_consumo))

@@ -56,7 +56,7 @@ with col1:
     agentes_df["participacao"] = agentes_df["valor"] / total * 100 if total else 0
     agentes_df["Rótulo"] = agentes_df["agente_causador"] + " (" + agentes_df["participacao"].round(1).astype(str) + "%)"
     fig_agentes = theme_fig(px.bar(agentes_df, x="valor", y="Rótulo", orientation="h", title="Valor total por agente causador", custom_data=["agente_causador"]))
-    fig_agentes.update_yaxes(categoryorder="total descending")
+    fig_agentes.update_yaxes(categoryorder="total ascending")
     fig_agentes = colorir_barras(fig_agentes, len(agentes_df))
     fig_agentes = rotular_barras(fig_agentes, agentes_df["valor"])
     figs = [("Valor total por agente causador", fig_agentes)]
