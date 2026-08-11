@@ -2,7 +2,7 @@ import streamlit as st
 
 from queries import frota
 from relatorio import montar_tabela
-from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_int, kpi_cols, opcoes, prompt_sem_base, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
+from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
 
 set_page("Visão Geral da Frota", "🚜")
 
@@ -51,6 +51,7 @@ tipos = (
 )
 quadro_equipamentos(tipos, col_tipo="classe_operacional", col_qtd="quantidade", ao_filtrar=set_filtro("filtro_frota_classe"))
 fig_tipos = bar(tipos, x="classe_operacional", y="quantidade", title="Quantidade por tipo de equipamento", horizontal=True, custom_data=["classe_operacional"])
+plot_click(fig_tipos, "chart_frota_tipos", set_filtro("filtro_frota_classe"))
 figs = [("Quantidade por tipo de equipamento", fig_tipos)]
 
 with st.expander("📋 Detalhamento", expanded=False):
