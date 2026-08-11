@@ -4,7 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from queries import diesel, etanol, frota, gastos, veiculos_leves
-from ui_helpers import LOGO_PATH, css_logo, fmt_br, fmt_brl, fmt_int, show_logo, sidebar_importar_base
+from ui_helpers import LOGO_PATH, base_carregada, css_logo, fmt_br, fmt_brl, fmt_int, prompt_sem_base, show_logo, sidebar_importar_base
 
 st.set_page_config(page_title="Portal de Dashboards", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
 if LOGO_PATH.exists():
@@ -57,6 +57,9 @@ if fonte:
 elif base_file.exists():
     mtime = datetime.fromtimestamp(base_file.stat().st_mtime)
     st.caption(f"Base de dados: `{base_file.name}` · atualizada em {mtime:%d/%m/%Y %H:%M}")
+
+if not base_carregada():
+    prompt_sem_base(mostrar_upload=False)
 
 st.markdown("---")
 

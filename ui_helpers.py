@@ -466,3 +466,26 @@ def sidebar_importar_base():
     _limpar_cache()
     st.session_state["_base_importada_msg"] = True
     st.rerun()
+
+
+def base_carregada() -> bool:
+    """True quando há base em memória (upload) ou o arquivo padrão existe em disco."""
+    if st.session_state.get("_base_fonte"):
+        return True
+    return dl.BASE_PATH.exists()
+
+
+def prompt_sem_base(mostrar_upload: bool = True):
+    """Aviso quando não há base disponível (ex.: Streamlit Cloud sem `dados/base.xlsx`).
+
+    `mostrar_upload=False` deve ser usado onde o importador já está na barra
+    lateral (ex.: página Início), evitando widget duplicado.
+    """
+    st.warning(
+        "Nenhuma base de dados disponível no momento. "
+        "Use a opção **📥 Importar base** (barra lateral) para carregar o `base.xlsx` "
+        "da sua máquina e liberar os dashboards."
+    )
+    if mostrar_upload:
+        sidebar_importar_base()
+    st.stop()

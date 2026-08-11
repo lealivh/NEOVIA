@@ -4,11 +4,14 @@ import plotly.express as px
 
 from queries import etanol, veiculos_leves
 from relatorio import montar_tabela
-from ui_helpers import bar, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
+from ui_helpers import bar, base_carregada, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 
 set_page("KPIs de Abastecimento", "📊")
 
 st.title("KPIs de Abastecimento (Veículos Leves)")
+
+if not base_carregada():
+    prompt_sem_base()
 
 df = etanol().copy()
 df = df[df["valor"].notna() & df["litros"].notna()]

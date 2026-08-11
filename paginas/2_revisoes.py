@@ -3,11 +3,14 @@ import streamlit as st
 
 from queries import gastos
 from relatorio import montar_tabela
-from ui_helpers import bar, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, plot_click, set_filtro, set_page, sidebar_acoes
+from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, plot_click, prompt_sem_base, set_filtro, set_page, sidebar_acoes
 
 set_page("Revisões Preventivas", "🛠️")
 
 st.title("Revisões Preventivas")
+
+if not base_carregada():
+    prompt_sem_base()
 
 st.info(
     "Os dados de horímetro / plano de manutenção ainda não constam na planilha base. "

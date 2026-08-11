@@ -3,12 +3,15 @@ import streamlit as st
 
 from queries import gastos
 from relatorio import montar_tabela
-from ui_helpers import bar, colorir_barras, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
+from ui_helpers import bar, base_carregada, colorir_barras, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 import plotly.express as px
 
 set_page("Custos de Peças e Serviços", "💰")
 
 st.title("Custos de Peças e Serviços")
+
+if not base_carregada():
+    prompt_sem_base()
 
 df = gastos().copy()
 df = df[df["valor"].notna()]

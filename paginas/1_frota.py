@@ -2,11 +2,14 @@ import streamlit as st
 
 from queries import frota
 from relatorio import montar_tabela
-from ui_helpers import bar, dataframe_estilizado, fmt_int, kpi_cols, opcoes, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
+from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_int, kpi_cols, opcoes, prompt_sem_base, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
 
 set_page("Visão Geral da Frota", "🚜")
 
 st.title("Visão Geral da Frota")
+
+if not base_carregada():
+    prompt_sem_base()
 
 df = frota()
 

@@ -4,12 +4,15 @@ import streamlit as st
 import data_loader as dl
 from queries import diesel, frota
 from relatorio import montar_tabela
-from ui_helpers import bar, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
+from ui_helpers import bar, base_carregada, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 import plotly.express as px
 
 set_page("Abastecimento — Financeiro e Quantitativo", "⛽")
 
 st.title("Abastecimento — Financeiro e Quantitativo (Diesel)")
+
+if not base_carregada():
+    prompt_sem_base()
 
 df = diesel().copy()
 df = df[df["valor"].notna() & df["quantidade"].notna()]
