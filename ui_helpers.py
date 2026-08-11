@@ -178,6 +178,8 @@ ICONES_EQUIPAMENTOS = {
     "IMPLEMENTO - VASSOURA": "Implemento Vassoura.png",
     "MINI CARREGADEIRA": "Mini Carregadeira.png",
     "PÁ CARREGADEIRA": "Pá Carregadeira.png",
+    "TRATOR DE ESTEIRA": "Trator Esteira.png",
+    "TRATOR DE ESTEIRAS": "Trator Esteira.png",
     "ROLO CORRUGADO": "Rolo Corrugado.png",
     "ROLO PNEUS": "Rolo de Pneus.png",
     "ROM PNEUMATICO": "Rolo de Pneus.png",
