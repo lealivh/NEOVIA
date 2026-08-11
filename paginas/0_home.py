@@ -11,13 +11,23 @@ from pathlib import Path
 import streamlit as st
 
 from queries import diesel, etanol, frota, gastos, veiculos_leves
-from ui_helpers import LOGO_PATH, base_carregada, css_logo, fmt_br, fmt_brl, fmt_int, prompt_sem_base, show_logo, sidebar_importar_base
+from ui_helpers import LOGO_PATH, base_carregada, css_logo, fmt_br, fmt_brl, fmt_int, prompt_sem_base, sidebar_importar_base
 
 # Configuração da página precisa ser o primeiro comando do Streamlit.
 st.set_page_config(page_title="Portal de Dashboards", page_icon="🏗️", layout="wide", initial_sidebar_state="expanded")
 if LOGO_PATH.exists():
     st.logo(str(LOGO_PATH), size="large")
 css_logo()
+
+# Aproxima o conteúdo do topo da página: reduz o preenchimento superior do
+# bloco principal e a margem do título (sem o logotipo, o título sobe).
+st.markdown(
+    "<style>"
+    '[data-testid="stMainBlockContainer"]{padding-top:1.2rem;}'
+    "h1{margin-top:0 !important;}"
+    "</style>",
+    unsafe_allow_html=True,
+)
 
 from acesso import exigir_login
 
@@ -61,7 +71,6 @@ DASHES = [
 with st.sidebar:
     sidebar_importar_base()
 
-show_logo(width=200)
 st.title("Portal de Dashboards — Neovia")
 
 # Indica a origem da base em uso (importada na sessão ou arquivo padrão).
