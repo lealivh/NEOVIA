@@ -17,6 +17,8 @@ from pathlib import Path
 
 import streamlit as st
 
+import gist_sync
+
 ARQUIVO_USUARIOS = Path(__file__).parent / "usuarios.json"
 ADMIN_PADRAO = "admin"
 SENHA_PADRAO = "neovia2026"
@@ -45,9 +47,14 @@ def _registro(senha: str, pode_visualizar: bool, pode_importar: bool, admin: boo
 
 
 def carregar_usuarios() -> dict:
-    """Lê o arquivo de usuários; cria admin padrão na primeira execução."""
+    """Lê o arquivo de usuários; se não existir, busca no Gist (Cloud) ou cria o
+    admin padrão na primeira execução."""
     if ARQUIVO_USUARIOS.exists():
         return json.loads(ARQUIVO_USUARIOS.read_text(encoding="utf-8"))
+    remoto = gist_sync.carregar()
+    if remoto:
+        salvar_usuarios(remoto)
+        return remoto
     usuarios = {ADMIN_PADRAO: _registro(SENHA_PADRAO, True, True, admin=True)}
     salvar_usuarios(usuarios)
     try:
@@ -59,6 +66,7 @@ def carregar_usuarios() -> dict:
 
 def salvar_usuarios(usuarios: dict):
     ARQUIVO_USUARIOS.write_text(json.dumps(usuarios, ensure_ascii=False, indent=2), encoding="utf-8")
+    gist_sync.salvar(usuarios)
 
 
 def autenticar(usuario: str, senha: str) -> bool:
@@ -112,6 +120,12 @@ def _gerenciar_usuarios():
     """Painel (somente admin) para cadastrar/remover usuários e trocar senha."""
     usuarios = carregar_usuarios()
     with st.expander("👥 Gerenciar usuários"):
+        if not gist_sync.configurado():
+            st.warning(
+                "⚠️ Persistência no GitHub não configurada. No Streamlit Cloud os usuários "
+                "criados aqui se perdem quando o app reinicia — configure `github.token` "
+                "em **Settings → Secrets** do Streamlit Cloud."
+            )
         st.caption(f"{len(usuarios)} usuário(s) cadastrado(s):")
         for nome, reg in sorted(usuarios.items()):
             marcacoes = []
