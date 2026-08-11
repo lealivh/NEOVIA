@@ -148,11 +148,15 @@ def colorir_barras(fig, n: int):
 
 
 def rotular_barras(fig, valores: pd.Series):
-    """Adiciona rótulos de valor (pt-BR) nas barras de um gráfico plotly."""
+    """Adiciona rótulos de valor (pt-BR) nas barras de um gráfico plotly.
+
+    Os rótulos ficam fora da barra (na ponta), maiores e em negrito.
+    """
     fig.update_traces(
         text=valores.map(_rotulo_valor),
         textposition="outside",
         cliponaxis=False,
+        textfont=dict(size=14, weight="bold", color="#231F1F"),
     )
     return fig
 
