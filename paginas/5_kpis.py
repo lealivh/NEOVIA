@@ -4,7 +4,7 @@ import plotly.express as px
 
 from queries import etanol, veiculos_leves
 from relatorio import montar_tabela
-from ui_helpers import bar, base_carregada, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
+from ui_helpers import bar, base_carregada, colorir_barras, converter_datas, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 
 set_page("KPIs de Abastecimento", "📊")
 
@@ -113,9 +113,8 @@ with st.expander("📋 Detalhamento", expanded=False):
     visiveis = [c for c in cols if c in f.columns]
     tabela = f[visiveis].sort_values("data_transacao", ascending=False)
     dataframe_estilizado(
-        tabela,
+        converter_datas(tabela, ["data_transacao"]),
         {
-            "data_transacao": st.column_config.DatetimeColumn("Data", format="DD/MM/YYYY HH:mm"),
             "litros": st.column_config.NumberColumn("Litros", format="%.1f"),
             "preco": st.column_config.NumberColumn("R$/L", format="%.2f"),
             "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),

@@ -4,7 +4,7 @@ import streamlit as st
 import data_loader as dl
 from queries import diesel, frota
 from relatorio import montar_tabela
-from ui_helpers import bar, base_carregada, colorir_barras, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
+from ui_helpers import bar, base_carregada, colorir_barras, converter_datas, dataframe_estilizado, fmt_br, fmt_brl, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, rotular_barras, set_filtro, set_page, sidebar_acoes, theme_fig
 import plotly.express as px
 
 set_page("Abastecimento — Financeiro e Quantitativo", "⛽")
@@ -101,9 +101,8 @@ with st.expander("📋 Detalhamento", expanded=False):
     visiveis = [c for c in cols if c in f.columns]
     tabela = f[visiveis].sort_values("data_hora", ascending=False)
     dataframe_estilizado(
-        tabela,
+        converter_datas(tabela, ["data_hora"]),
         {
-            "data_hora": st.column_config.DatetimeColumn("Data/Hora", format="DD/MM/YYYY HH:mm"),
             "quantidade": st.column_config.NumberColumn("Litros", format="%.1f"),
             "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
         },

@@ -6,3 +6,4 @@ venv/
 .env
 dados/
 *.log
+usuarios.json

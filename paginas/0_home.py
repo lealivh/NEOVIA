@@ -11,6 +11,10 @@ if LOGO_PATH.exists():
     st.logo(str(LOGO_PATH), size="large")
 css_logo()
 
+from acesso import exigir_login
+
+exigir_login()
+
 DASHES = [
     (
         "🚜",

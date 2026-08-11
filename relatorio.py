@@ -155,6 +155,22 @@ def _tabela_pdf(dados: pd.DataFrame, doc_width: float, max_linhas: int, st_sec, 
     return items
 
 
+def _png_figura(fig):
+    """Renderiza a figura em PNG via kaleido; retorna bytes ou None.
+
+    Tenta 2x — a primeira chamada do kaleido pode falhar enquanto baixa o
+    Chromium embutido (comum no primeiro uso / Cloud). Em vez de descartar
+    o gráfico em silêncio, retorna None para o chamador avisar no PDF.
+    """
+    for tentativa in (1, 2):
+        try:
+            return fig.to_image(format="png", width=1400, height=650, scale=2)
+        except Exception:
+            if tentativa == 2:
+                return None
+    return None
+
+
 def gerar_pdf(
     titulo: str,
     figs: list[tuple[str, "go.Figure"]],
@@ -198,9 +214,9 @@ def gerar_pdf(
     story.append(Spacer(1, 6))
 
     for nome, fig in figs:
-        try:
-            png = fig.to_image(format="png", width=1400, height=650, scale=2)
-        except Exception:
+        png = _png_figura(fig)
+        if png is None:
+            story.append(Paragraph(f"{nome} — gráfico não pôde ser gerado nesta execução.", st_cap))
             continue
         im = PILImage.open(BytesIO(png))
         w, h = im.size

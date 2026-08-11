@@ -2,7 +2,7 @@ import streamlit as st
 
 from queries import frota
 from relatorio import montar_tabela
-from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
+from ui_helpers import bar, base_carregada, converter_datas, dataframe_estilizado, fmt_int, kpi_cols, opcoes, plot_click, prompt_sem_base, quadro_equipamentos, set_filtro, set_page, sidebar_acoes
 
 set_page("Visão Geral da Frota", "🚜")
 
@@ -58,7 +58,7 @@ with st.expander("📋 Detalhamento", expanded=False):
     cols = ["prefixo", "classe_operacional", "situacao", "status", "equipe", "locador", "marca", "modelo", "ano", "placa", "data_mobilizacao"]
     visiveis = [c for c in cols if c in f.columns]
     tabela = f[visiveis].sort_values(["classe_operacional", "prefixo"])
-    dataframe_estilizado(tabela)
+    dataframe_estilizado(converter_datas(tabela, ["data_mobilizacao"]))
     st.caption(f"{len(f)} registros exibidos.")
 
 sidebar_acoes(

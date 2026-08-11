@@ -3,7 +3,7 @@ import streamlit as st
 
 from queries import gastos
 from relatorio import montar_tabela
-from ui_helpers import bar, base_carregada, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, plot_click, prompt_sem_base, set_filtro, set_page, sidebar_acoes
+from ui_helpers import bar, base_carregada, converter_datas, dataframe_estilizado, fmt_brl, fmt_int, kpi_cols, linha, opcoes, plot_click, prompt_sem_base, set_filtro, set_page, sidebar_acoes
 
 set_page("Revisões Preventivas", "🛠️")
 
@@ -76,9 +76,8 @@ with st.expander("📋 Detalhamento", expanded=False):
     visiveis = [c for c in cols if c in f.columns]
     tabela = f[visiveis].sort_values("data_nf", ascending=False)
     dataframe_estilizado(
-        tabela,
+        converter_datas(tabela, ["data_nf"]),
         {
-            "data_nf": st.column_config.DatetimeColumn("Data NF", format="DD/MM/YYYY"),
             "valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
         },
     )

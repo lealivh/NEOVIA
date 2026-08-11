@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import data_loader as dl
+from acesso import exigir_login, permissao
 
 PROJ_DIR = Path(__file__).parent
 LOGO_PATH = PROJ_DIR / "assets" / "logo.png"
@@ -45,6 +46,7 @@ def set_page(title: str, icon: str):
     if LOGO_PATH.exists():
         st.logo(str(LOGO_PATH), size="large")
     css_logo()
+    exigir_login()
 
 
 def css_logo():
@@ -165,6 +167,8 @@ ICONES_EQUIPAMENTOS = {
 }
 
 _EMOJI_FALLBACK = [
+    (r"TRATOR DE PNEUS", "🚜"),
+    (r"TRATOR DE ESTEIRAS?$", "🐛"),
     (r"TRATOR", "🚜"),
     (r"BOMBA", "🚛"),
     (r"BETONEIRA", "🚚"),
@@ -327,6 +331,20 @@ def dataframe_estilizado(df: pd.DataFrame, colunas: dict | None = None):
     st.dataframe(df, column_config=colunas, width="stretch", hide_index=True)
 
 
+def converter_datas(df: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
+    """Copia o DataFrame convertendo colunas datetime para `dd/mm/yyyy hh:mm`.
+
+    O `DatetimeColumn(format=...)` não respeita o formato no Streamlit 1.60
+    (mostra ISO), então a conversão é feita direto na string exibida. O df
+    original não é alterado (a coluna original segue para o PDF).
+    """
+    out = df.copy()
+    for c in colunas:
+        if c in out.columns and pd.api.types.is_datetime64_any_dtype(out[c]):
+            out[c] = out[c].apply(lambda v: v.strftime("%d/%m/%Y %H:%M") if pd.notna(v) else "")
+    return out
+
+
 def _limpar_cache():
     import queries
 
@@ -422,6 +440,10 @@ def sidebar_importar_base():
     if st.session_state.pop("_base_importada_msg", False):
         st.success("Base importada! Dados atualizados em todos os dashboards.")
 
+    if not permissao("pode_importar"):
+        st.caption("Sem permissão para importar a base — solicite a um administrador.")
+        return
+
     if "importar_base_ativo" not in st.session_state:
         st.session_state["importar_base_ativo"] = False
     st.toggle(
@@ -481,11 +503,17 @@ def prompt_sem_base(mostrar_upload: bool = True):
     `mostrar_upload=False` deve ser usado onde o importador já está na barra
     lateral (ex.: página Início), evitando widget duplicado.
     """
-    st.warning(
-        "Nenhuma base de dados disponível no momento. "
-        "Use a opção **📥 Importar base** (barra lateral) para carregar o `base.xlsx` "
-        "da sua máquina e liberar os dashboards."
-    )
-    if mostrar_upload:
-        sidebar_importar_base()
+    if permissao("pode_importar"):
+        st.warning(
+            "Nenhuma base de dados disponível no momento. "
+            "Use a opção **📥 Importar base** (barra lateral) para carregar o `base.xlsx` "
+            "da sua máquina e liberar os dashboards."
+        )
+        if mostrar_upload:
+            sidebar_importar_base()
+    else:
+        st.warning(
+            "Nenhuma base de dados disponível no momento e seu usuário não tem "
+            "permissão para importá-la. Solicite a um administrador que carregue o `base.xlsx`."
+        )
     st.stop()
